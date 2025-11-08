@@ -1,0 +1,202 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// ============================================
+// MODELO DE USUARIO
+// ============================================
+model User {
+  id            String      @id @default(cuid())
+  name          String
+  email         String      @unique
+  emailVerified DateTime?
+  password      String
+  image         String?
+  role          Role        @default(USER)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relaciones
+  cursosCreados Curso[]
+  asistencias   Asistencia[]
+  accounts      Account[]
+  sessions      Session[]
+  
+  @@map("users")
+}
+
+enum Role {
+  USER
+  ADMIN
+  INSTRUCTOR
+}
+
+// ============================================
+// MODELOS DE NEXTAUTH
+// ============================================
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// MODELO DE CURSOS
+// ============================================
+model Curso {
+  id               String       @id @default(cuid())
+  titulo           String
+  slug             String       @unique
+  descripcion      String?      @db.Text
+  descripcionBreve String?      @db.VarChar(200)
+  imagenUrl        String
+  imagenPublicId   String?      // Para Cloudinary
+  
+  // Fechas y duración
+  fechaInicio      DateTime?
+  fechaFin         DateTime?
+  duracionHoras    Int
+  
+  // Características
+  modalidad        Modalidad
+  certificado      Boolean      @default(true)
+  precio           Decimal?     @db.Decimal(10, 2)
+  estado           EstadoCurso  @default(ACTIVO)
+  
+  // Cupos
+  cupoMaximo       Int?
+  cupoActual       Int          @default(0)
+  
+  // Metadata
+  vistas           Int          @default(0)
+  orden            Int          @default(0)
+  destacado        Boolean      @default(false)
+  
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  
+  // Relaciones
+  creadorId        String
+  creador          User         @relation(fields: [creadorId], references: [id])
+  etiquetas        EtiquetaCurso[]
+  asistencias      Asistencia[]
+  
+  @@index([estado, fechaInicio])
+  @@index([creadorId])
+  @@index([slug])
+  @@index([destacado])
+  @@map("cursos")
+}
+
+enum Modalidad {
+  PRESENCIAL
+  VIRTUAL
+  HIBRIDO
+}
+
+enum EstadoCurso {
+  BORRADOR
+  ACTIVO
+  PROXIMO
+  EN_CURSO
+  FINALIZADO
+  CANCELADO
+}
+
+// ============================================
+// ETIQUETAS
+// ============================================
+model Etiqueta {
+  id      String          @id @default(cuid())
+  nombre  String          @unique
+  slug    String          @unique
+  color   String?         @default("#3B82F6")
+  cursos  EtiquetaCurso[]
+  
+  @@map("etiquetas")
+}
+
+model EtiquetaCurso {
+  cursoId    String
+  etiquetaId String
+  
+  curso      Curso    @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  etiqueta   Etiqueta @relation(fields: [etiquetaId], references: [id], onDelete: Cascade)
+  
+  @@id([cursoId, etiquetaId])
+  @@map("cursos_etiquetas")
+}
+
+// ============================================
+// ASISTENCIAS
+// ============================================
+model Asistencia {
+  id          String           @id @default(cuid())
+  fecha       DateTime         @default(now())
+  estado      EstadoAsistencia
+  observacion String?
+  horaEntrada DateTime?
+  horaSalida  DateTime?
+  
+  cursoId     String
+  curso       Curso   @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  
+  usuarioId   String
+  usuario     User    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([cursoId, usuarioId, fecha])
+  @@index([cursoId, fecha])
+  @@index([usuarioId])
+  @@map("asistencias")
+}
+
+enum EstadoAsistencia {
+  PRESENTE
+  AUSENTE
+  TARDANZA
+  JUSTIFICADO
+}

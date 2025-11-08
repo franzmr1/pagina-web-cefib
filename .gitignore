@@ -50,3 +50,4 @@ Allow: /
 Disallow: /api/
 
 Sitemap: https://cefib.pe/sitemap.xml
+/src/generated/prisma
